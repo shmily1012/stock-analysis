@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "stock-prediction": {
+      "command": "python",
+      "args": ["-m", "stock_prediction.mcp_server"],
+      "cwd": "/home/user/stock-analysis",
+      "env": {
+        "PYTHONPATH": "/home/user/stock-analysis"
+      }
+    }
+  }
+}
