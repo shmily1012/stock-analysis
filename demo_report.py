@@ -57,6 +57,8 @@ report = AnalysisReport(
     data_points=len(df),
     technical_summary=technical_summary,
     prediction=prediction,
+    history=df,
 )
 
+# Default: Chinese report
 print(StockPredictionAgent.format_report(report))

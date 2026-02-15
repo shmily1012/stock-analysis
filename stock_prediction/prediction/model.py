@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
 
 
@@ -24,6 +25,8 @@ class PredictionResult:
     support_level: float
     resistance_level: float
     method: str
+    r2_score_5d: float | None = None
+    r2_score_20d: float | None = None
 
 
 class StockPredictor:
@@ -34,6 +37,10 @@ class StockPredictor:
       - Linear regression on engineered features (trend extrapolation)
       - Support / resistance estimation from recent price action
     """
+
+    # Maximum allowed predicted return to prevent wild extrapolation
+    MAX_RETURN_5D = 0.15   # ±15%
+    MAX_RETURN_20D = 0.30  # ±30%
 
     FEATURE_COLS = [
         "SMA_20",
@@ -94,13 +101,17 @@ class StockPredictor:
         X_latest = df[feature_cols].iloc[[-1]]
 
         # --- 5-day prediction ------------------------------------------------------
-        pred_5d_ret = self._fit_predict(train_5d, feature_cols, "Target_5d", X_latest)
+        pred_5d_ret, r2_5d = self._fit_predict(
+            train_5d, feature_cols, "Target_5d", X_latest
+        )
+        pred_5d_ret = np.clip(pred_5d_ret, -self.MAX_RETURN_5D, self.MAX_RETURN_5D)
         pred_5d_price = current_price * (1 + pred_5d_ret)
 
         # --- 20-day prediction -----------------------------------------------------
-        pred_20d_ret = self._fit_predict(
+        pred_20d_ret, r2_20d = self._fit_predict(
             train_20d, feature_cols, "Target_20d", X_latest
         )
+        pred_20d_ret = np.clip(pred_20d_ret, -self.MAX_RETURN_20D, self.MAX_RETURN_20D)
         pred_20d_price = current_price * (1 + pred_20d_ret)
 
         # --- Support / Resistance --------------------------------------------------
@@ -124,6 +135,8 @@ class StockPredictor:
             support_level=round(support, 2),
             resistance_level=round(resistance, 2),
             method="Linear Regression + Technical Features",
+            r2_score_5d=r2_5d,
+            r2_score_20d=r2_20d,
         )
 
     # ------------------------------------------------------------------
@@ -136,10 +149,11 @@ class StockPredictor:
         feature_cols: list[str],
         target_col: str,
         X_latest: pd.DataFrame,
-    ) -> float:
+    ) -> tuple[float, float | None]:
+        """Fit model and return (predicted_return, r2_score)."""
         if len(train_df) < 5:
-            # Fallback: simple momentum extrapolation
-            return float(self.df["Close"].pct_change(5).iloc[-1] or 0)
+            # Fallback: simple momentum extrapolation (no R² available)
+            return float(self.df["Close"].pct_change(5).iloc[-1] or 0), None
 
         X = train_df[feature_cols].values
         y = train_df[target_col].values
@@ -147,8 +161,11 @@ class StockPredictor:
         X_scaled = self._scaler.fit_transform(X)
         self._model.fit(X_scaled, y)
 
+        y_pred_train = self._model.predict(X_scaled)
+        r2 = round(float(r2_score(y, y_pred_train)), 4)
+
         X_new = self._scaler.transform(X_latest.values)
-        return float(self._model.predict(X_new)[0])
+        return float(self._model.predict(X_new)[0]), r2
 
     @staticmethod
     def _aggregate_signals(df: pd.DataFrame) -> dict[str, int]:
@@ -181,6 +198,16 @@ class StockPredictor:
             signals["bb"] = -1  # above upper band -> pullback
         else:
             signals["bb"] = 0
+
+        # Volume confirmation
+        if "Vol_SMA_20" in df.columns and last.get("Vol_SMA_20", 0) > 0:
+            vol_ratio = last["Volume"] / last["Vol_SMA_20"]
+            # High volume confirms the prevailing price direction
+            if vol_ratio > 1.5:
+                price_chg = last["Close"] - df["Close"].iloc[-2] if len(df) > 1 else 0
+                signals["volume"] = 1 if price_chg > 0 else -1
+            else:
+                signals["volume"] = 0
 
         return signals
 

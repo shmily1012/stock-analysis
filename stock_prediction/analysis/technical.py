@@ -24,6 +24,8 @@ class TechnicalSummary:
     bb_middle: float
     bb_lower: float
     atr_14: float
+    volume_avg_20: float  # 20-day average volume
+    volume_ratio: float  # latest volume / 20-day average
     price_vs_sma20: str  # "above" / "below"
     price_vs_sma50: str
     rsi_signal: str  # "overbought" / "oversold" / "neutral"
@@ -31,6 +33,7 @@ class TechnicalSummary:
     bb_position: str  # "above_upper" / "below_lower" / "within"
     trend: str  # "uptrend" / "downtrend" / "sideways"
     volatility: str  # "high" / "medium" / "low"
+    volume_signal: str  # "high_volume" / "low_volume" / "normal"
 
 
 class TechnicalAnalyzer:
@@ -134,6 +137,8 @@ class TechnicalAnalyzer:
         self.df["BB_Middle"] = bb_middle
         self.df["BB_Lower"] = bb_lower
         self.df["ATR_14"] = self.atr(self.df)
+        if "Volume" in self.df.columns:
+            self.df["Vol_SMA_20"] = self.sma(self.df["Volume"].astype(float), 20)
 
     # ------------------------------------------------------------------
     # Summary
@@ -185,6 +190,21 @@ class TechnicalAnalyzer:
         else:
             volatility = "low"
 
+        # Volume analysis
+        if "Vol_SMA_20" in self.df.columns and last.get("Vol_SMA_20", 0) > 0:
+            vol_avg_20 = last["Vol_SMA_20"]
+            vol_ratio = last["Volume"] / vol_avg_20
+            if vol_ratio > 1.5:
+                volume_signal = "high_volume"
+            elif vol_ratio < 0.5:
+                volume_signal = "low_volume"
+            else:
+                volume_signal = "normal"
+        else:
+            vol_avg_20 = 0.0
+            vol_ratio = 0.0
+            volume_signal = "N/A"
+
         return TechnicalSummary(
             sma_20=round(last["SMA_20"], 2),
             sma_50=round(last["SMA_50"], 2),
@@ -198,6 +218,8 @@ class TechnicalAnalyzer:
             bb_middle=round(last["BB_Middle"], 2),
             bb_lower=round(last["BB_Lower"], 2),
             atr_14=round(last["ATR_14"], 2),
+            volume_avg_20=round(vol_avg_20, 0),
+            volume_ratio=round(vol_ratio, 2),
             price_vs_sma20=price_vs_sma20,
             price_vs_sma50=price_vs_sma50,
             rsi_signal=rsi_signal,
@@ -205,6 +227,7 @@ class TechnicalAnalyzer:
             bb_position=bb_position,
             trend=trend,
             volatility=volatility,
+            volume_signal=volume_signal,
         )
 
     def get_dataframe(self) -> pd.DataFrame:

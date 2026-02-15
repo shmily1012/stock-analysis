@@ -131,6 +131,8 @@ class AnalyzeSkill(Skill):
             ["Bollinger Middle", summary.bb_middle],
             ["Bollinger Lower", summary.bb_lower],
             ["ATR (14)", summary.atr_14],
+            ["Volume Avg (20)", f"{summary.volume_avg_20:,.0f}"],
+            ["Volume Ratio", summary.volume_ratio],
         ]
 
         sig_table = [
@@ -139,6 +141,7 @@ class AnalyzeSkill(Skill):
             ["RSI Signal", summary.rsi_signal],
             ["MACD Signal", summary.macd_signal_str],
             ["Bollinger Position", summary.bb_position],
+            ["Volume Signal", summary.volume_signal],
             ["Overall Trend", summary.trend],
             ["Volatility", summary.volatility],
         ]
@@ -182,6 +185,9 @@ class PredictSkill(Skill):
             "neutral": "[FLAT]",
         }.get(pred.direction, "")
 
+        r2_5d = f"{pred.r2_score_5d:.4f}" if pred.r2_score_5d is not None else "N/A"
+        r2_20d = f"{pred.r2_score_20d:.4f}" if pred.r2_score_20d is not None else "N/A"
+
         pred_table = [
             ["Current Price", f"{pred.current_price}"],
             [
@@ -196,6 +202,8 @@ class PredictSkill(Skill):
             ["Confidence", pred.confidence.upper()],
             ["Support Level", f"{pred.support_level}"],
             ["Resistance Level", f"{pred.resistance_level}"],
+            ["Model R² (5d)", r2_5d],
+            ["Model R² (20d)", r2_20d],
             ["Method", pred.method],
         ]
 
